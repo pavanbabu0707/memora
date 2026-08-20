@@ -1,9 +1,12 @@
 import os
 import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+
+from app.database import save_photo_metadata
 
 
 app = FastAPI(title="Memora")
@@ -36,9 +39,23 @@ def upload_photo(file: UploadFile = File(...)) -> dict[str, str]:
     stored_filename = f"{photo_id}{extension}"
     storage_directory = get_photo_storage_directory()
     storage_directory.mkdir(parents=True, exist_ok=True)
+    stored_path = storage_directory / stored_filename
 
-    with (storage_directory / stored_filename).open("wb") as stored_photo:
+    with stored_path.open("wb") as stored_photo:
         shutil.copyfileobj(file.file, stored_photo)
+
+    try:
+        save_photo_metadata(
+            photo_id=photo_id,
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            stored_path=stored_path,
+            file_size=stored_path.stat().st_size,
+            uploaded_at=datetime.now(UTC).isoformat(),
+        )
+    except Exception:
+        stored_path.unlink(missing_ok=True)
+        raise
 
     return {
         "id": photo_id,
