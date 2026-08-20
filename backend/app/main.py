@@ -25,12 +25,8 @@ def health() -> dict[str, str]:
 
 
 @app.post("/photos")
-def upload_photo(file: list[UploadFile] = File(...)) -> dict[str, str]:
-    if len(file) != 1:
-        raise HTTPException(status_code=400, detail="Exactly one photo is required")
-
-    uploaded_photo = file[0]
-    original_filename = uploaded_photo.filename or ""
+def upload_photo(file: UploadFile = File(...)) -> dict[str, str]:
+    original_filename = file.filename or ""
     extension = Path(original_filename).suffix.lower()
 
     if extension not in SUPPORTED_PHOTO_EXTENSIONS:
@@ -42,7 +38,7 @@ def upload_photo(file: list[UploadFile] = File(...)) -> dict[str, str]:
     storage_directory.mkdir(parents=True, exist_ok=True)
 
     with (storage_directory / stored_filename).open("wb") as stored_photo:
-        shutil.copyfileobj(uploaded_photo.file, stored_photo)
+        shutil.copyfileobj(file.file, stored_photo)
 
     return {
         "id": photo_id,
