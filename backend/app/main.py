@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
-from app.database import save_photo_metadata
+from app.database import list_photo_metadata, save_photo_metadata
 
 
 app = FastAPI(title="Memora")
@@ -25,6 +25,11 @@ def get_photo_storage_directory() -> Path:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/photos")
+def list_photos() -> list[dict[str, str | int]]:
+    return list_photo_metadata()
 
 
 @app.post("/photos")

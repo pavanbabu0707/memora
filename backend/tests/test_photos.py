@@ -140,3 +140,79 @@ def test_separate_uploads_create_separate_database_records(
         (first_response.json()["id"], "first.jpg"),
         (second_response.json()["id"], "second.png"),
     ]
+
+
+def test_list_photos_returns_empty_array(
+    temporary_directory: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure_test_paths(temporary_directory, monkeypatch)
+
+    response = client.get("/photos")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_photos_returns_uploaded_photo_without_stored_path(
+    temporary_directory: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure_test_paths(temporary_directory, monkeypatch)
+    content = b"listed-photo"
+
+    upload_response = client.post(
+        "/photos",
+        files={"file": ("listed.jpg", content, "image/jpeg")},
+    )
+    response = client.get("/photos")
+
+    assert upload_response.status_code == 200
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": upload_response.json()["id"],
+            "original_filename": "listed.jpg",
+            "stored_filename": upload_response.json()["stored_filename"],
+            "file_size": len(content),
+            "uploaded_at": response.json()[0]["uploaded_at"],
+        }
+    ]
+    assert "stored_path" not in response.json()[0]
+
+
+def test_list_photos_returns_newest_upload_first(
+    temporary_directory: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, database_path = configure_test_paths(temporary_directory, monkeypatch)
+
+    first_response = client.post(
+        "/photos",
+        files={"file": ("first.jpg", b"first-photo", "image/jpeg")},
+    )
+    second_response = client.post(
+        "/photos",
+        files={"file": ("second.png", b"second-photo", "image/png")},
+    )
+
+    with closing(sqlite3.connect(database_path)) as connection:
+        connection.execute(
+            "UPDATE photos SET uploaded_at = ? WHERE id = ?",
+            ("2026-01-01T00:00:00+00:00", first_response.json()["id"]),
+        )
+        connection.execute(
+            "UPDATE photos SET uploaded_at = ? WHERE id = ?",
+            ("2026-01-02T00:00:00+00:00", second_response.json()["id"]),
+        )
+        connection.commit()
+
+    response = client.get("/photos")
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert response.status_code == 200
+    assert [photo["id"] for photo in response.json()] == [
+        second_response.json()["id"],
+        first_response.json()["id"],
+    ]
