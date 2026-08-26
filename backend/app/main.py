@@ -13,6 +13,7 @@ from app.database import (
     list_photo_metadata,
     save_photo_metadata,
 )
+from app.schemas import PhotoMetadataResponse, PhotoUploadResponse
 
 
 app = FastAPI(title="Memora")
@@ -63,12 +64,12 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/photos")
+@app.get("/photos", response_model=list[PhotoMetadataResponse])
 def list_photos() -> list[dict[str, str | int | None]]:
     return list_photo_metadata()
 
 
-@app.post("/photos")
+@app.post("/photos", response_model=PhotoUploadResponse)
 def upload_photo(file: UploadFile = File(...)) -> dict[str, str]:
     original_filename = file.filename or ""
     extension = Path(original_filename).suffix.lower()
