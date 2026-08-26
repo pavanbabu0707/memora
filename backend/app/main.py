@@ -5,15 +5,21 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
-from app.database import list_photo_metadata, save_photo_metadata
+from app.database import (
+    get_photo_file_metadata,
+    list_photo_metadata,
+    save_photo_metadata,
+)
 
 
 app = FastAPI(title="Memora")
 
 SUPPORTED_PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 EXPECTED_IMAGE_FORMATS = {".jpg": "JPEG", ".jpeg": "JPEG", ".png": "PNG"}
+IMAGE_MEDIA_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
 
 
 def get_photo_storage_directory() -> Path:
@@ -100,3 +106,17 @@ def upload_photo(file: UploadFile = File(...)) -> dict[str, str]:
         "original_filename": original_filename,
         "stored_filename": stored_filename,
     }
+
+
+@app.get("/photos/{photo_id}/file", response_class=FileResponse)
+def get_photo_file(photo_id: str) -> FileResponse:
+    metadata = get_photo_file_metadata(photo_id)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    stored_path = Path(metadata["stored_path"])
+    media_type = IMAGE_MEDIA_TYPES.get(Path(metadata["stored_filename"]).suffix.lower())
+    if not stored_path.is_file() or media_type is None:
+        raise HTTPException(status_code=404, detail="Photo file not found")
+
+    return FileResponse(path=stored_path, media_type=media_type)

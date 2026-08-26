@@ -317,3 +317,64 @@ def test_existing_photos_table_is_migrated_without_losing_records(
 
     assert {"width", "height"}.issubset(columns)
     assert record_count == 1
+
+
+@pytest.mark.parametrize(
+    ("original_filename", "image_format", "content_type"),
+    [
+        ("retrieved.jpg", "JPEG", "image/jpeg"),
+        ("retrieved.png", "PNG", "image/png"),
+    ],
+)
+def test_retrieve_uploaded_photo_file(
+    temporary_directory: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    original_filename: str,
+    image_format: str,
+    content_type: str,
+) -> None:
+    photo_directory, _ = configure_test_paths(temporary_directory, monkeypatch)
+    content = create_image_bytes(image_format)
+    upload_response = client.post(
+        "/photos",
+        files={"file": (original_filename, content, content_type)},
+    )
+
+    response = client.get(f"/photos/{upload_response.json()['id']}/file")
+
+    assert upload_response.status_code == 200
+    assert response.status_code == 200
+    assert response.content == content
+    assert response.headers["content-type"] == content_type
+    assert b"stored_path" not in response.content
+    assert str(photo_directory).encode() not in response.content
+    assert all(str(photo_directory) not in value for value in response.headers.values())
+
+
+def test_retrieve_unknown_photo_returns_not_found(
+    temporary_directory: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure_test_paths(temporary_directory, monkeypatch)
+
+    response = client.get("/photos/unknown-photo/file")
+
+    assert response.status_code == 404
+
+
+def test_retrieve_photo_with_missing_file_returns_not_found(
+    temporary_directory: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    photo_directory, _ = configure_test_paths(temporary_directory, monkeypatch)
+    upload_response = client.post(
+        "/photos",
+        files={"file": ("missing.jpg", create_image_bytes("JPEG"), "image/jpeg")},
+    )
+    stored_path = photo_directory / upload_response.json()["stored_filename"]
+    stored_path.unlink()
+
+    response = client.get(f"/photos/{upload_response.json()['id']}/file")
+
+    assert upload_response.status_code == 200
+    assert response.status_code == 404

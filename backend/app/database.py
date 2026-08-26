@@ -104,3 +104,23 @@ def list_photo_metadata() -> list[dict[str, str | int | None]]:
         ).fetchall()
 
     return [dict(row) for row in rows]
+
+
+def get_photo_file_metadata(photo_id: str) -> dict[str, str] | None:
+    database_path = get_database_path()
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with closing(sqlite3.connect(database_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        ensure_photos_table(connection)
+        connection.commit()
+        row = connection.execute(
+            """
+            SELECT stored_filename, stored_path
+            FROM photos
+            WHERE id = ?
+            """,
+            (photo_id,),
+        ).fetchone()
+
+    return dict(row) if row is not None else None
