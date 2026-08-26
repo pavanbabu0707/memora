@@ -4,7 +4,7 @@ from contextlib import closing
 from pathlib import Path
 
 
-def create_photos_table(connection: sqlite3.Connection) -> None:
+def ensure_photos_table(connection: sqlite3.Connection) -> None:
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS photos (
@@ -13,10 +13,20 @@ def create_photos_table(connection: sqlite3.Connection) -> None:
             stored_filename TEXT NOT NULL,
             stored_path TEXT NOT NULL,
             file_size INTEGER NOT NULL,
-            uploaded_at TEXT NOT NULL
+            uploaded_at TEXT NOT NULL,
+            width INTEGER,
+            height INTEGER
         )
         """
     )
+
+    columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(photos)").fetchall()
+    }
+    if "width" not in columns:
+        connection.execute("ALTER TABLE photos ADD COLUMN width INTEGER")
+    if "height" not in columns:
+        connection.execute("ALTER TABLE photos ADD COLUMN height INTEGER")
 
 
 def get_database_path() -> Path:
@@ -35,12 +45,14 @@ def save_photo_metadata(
     stored_path: Path,
     file_size: int,
     uploaded_at: str,
+    width: int,
+    height: int,
 ) -> None:
     database_path = get_database_path()
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
     with closing(sqlite3.connect(database_path)) as connection:
-        create_photos_table(connection)
+        ensure_photos_table(connection)
         connection.execute(
             """
             INSERT INTO photos (
@@ -49,8 +61,10 @@ def save_photo_metadata(
                 stored_filename,
                 stored_path,
                 file_size,
-                uploaded_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                uploaded_at,
+                width,
+                height
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 photo_id,
@@ -59,18 +73,20 @@ def save_photo_metadata(
                 str(stored_path),
                 file_size,
                 uploaded_at,
+                width,
+                height,
             ),
         )
         connection.commit()
 
 
-def list_photo_metadata() -> list[dict[str, str | int]]:
+def list_photo_metadata() -> list[dict[str, str | int | None]]:
     database_path = get_database_path()
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
     with closing(sqlite3.connect(database_path)) as connection:
         connection.row_factory = sqlite3.Row
-        create_photos_table(connection)
+        ensure_photos_table(connection)
         connection.commit()
         rows = connection.execute(
             """
@@ -79,7 +95,9 @@ def list_photo_metadata() -> list[dict[str, str | int]]:
                 original_filename,
                 stored_filename,
                 file_size,
-                uploaded_at
+                uploaded_at,
+                width,
+                height
             FROM photos
             ORDER BY uploaded_at DESC
             """
