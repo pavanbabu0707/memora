@@ -15,7 +15,9 @@ def ensure_photos_table(connection: sqlite3.Connection) -> None:
             file_size INTEGER NOT NULL,
             uploaded_at TEXT NOT NULL,
             width INTEGER,
-            height INTEGER
+            height INTEGER,
+            thumbnail_filename TEXT,
+            thumbnail_path TEXT
         )
         """
     )
@@ -27,6 +29,10 @@ def ensure_photos_table(connection: sqlite3.Connection) -> None:
         connection.execute("ALTER TABLE photos ADD COLUMN width INTEGER")
     if "height" not in columns:
         connection.execute("ALTER TABLE photos ADD COLUMN height INTEGER")
+    if "thumbnail_filename" not in columns:
+        connection.execute("ALTER TABLE photos ADD COLUMN thumbnail_filename TEXT")
+    if "thumbnail_path" not in columns:
+        connection.execute("ALTER TABLE photos ADD COLUMN thumbnail_path TEXT")
 
 
 def get_database_path() -> Path:
@@ -47,6 +53,8 @@ def save_photo_metadata(
     uploaded_at: str,
     width: int,
     height: int,
+    thumbnail_filename: str,
+    thumbnail_path: Path,
 ) -> None:
     database_path = get_database_path()
     database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -63,8 +71,10 @@ def save_photo_metadata(
                 file_size,
                 uploaded_at,
                 width,
-                height
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                height,
+                thumbnail_filename,
+                thumbnail_path
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 photo_id,
@@ -75,6 +85,8 @@ def save_photo_metadata(
                 uploaded_at,
                 width,
                 height,
+                thumbnail_filename,
+                str(thumbnail_path),
             ),
         )
         connection.commit()
@@ -117,6 +129,26 @@ def get_photo_file_metadata(photo_id: str) -> dict[str, str] | None:
         row = connection.execute(
             """
             SELECT stored_filename, stored_path
+            FROM photos
+            WHERE id = ?
+            """,
+            (photo_id,),
+        ).fetchone()
+
+    return dict(row) if row is not None else None
+
+
+def get_photo_thumbnail_metadata(photo_id: str) -> dict[str, str | None] | None:
+    database_path = get_database_path()
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with closing(sqlite3.connect(database_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        ensure_photos_table(connection)
+        connection.commit()
+        row = connection.execute(
+            """
+            SELECT thumbnail_filename, thumbnail_path
             FROM photos
             WHERE id = ?
             """,

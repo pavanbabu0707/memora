@@ -144,9 +144,13 @@ function App() {
           {photos.map((photo) => (
             <figure className="photo-card" key={photo.id}>
               <img
-                src={`/photos/${encodeURIComponent(photo.id)}/file`}
+                src={`/photos/${encodeURIComponent(photo.id)}/thumbnail`}
                 alt={photo.original_filename}
                 loading="lazy"
+                onError={(event) => {
+                  event.currentTarget.onerror = null;
+                  event.currentTarget.src = `/photos/${encodeURIComponent(photo.id)}/file`;
+                }}
               />
               <figcaption title={photo.original_filename}>
                 {photo.original_filename}
