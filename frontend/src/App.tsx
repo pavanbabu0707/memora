@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 interface Photo {
   id: string;
@@ -10,23 +10,30 @@ interface Photo {
   height: number | null;
 }
 
+async function fetchPhotos(signal?: AbortSignal): Promise<Photo[]> {
+  const response = await fetch("/photos", { signal });
+  if (!response.ok) {
+    throw new Error("Unable to load your photos.");
+  }
+
+  return (await response.json()) as Photo[];
+}
+
 function App() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
 
     async function loadPhotos() {
       try {
-        const response = await fetch("/photos", { signal: controller.signal });
-        if (!response.ok) {
-          throw new Error("Unable to load your photos.");
-        }
-
-        const result = (await response.json()) as Photo[];
-        setPhotos(result);
+        setPhotos(await fetchPhotos(controller.signal));
       } catch (requestError) {
         if (requestError instanceof DOMException && requestError.name === "AbortError") {
           return;
@@ -44,6 +51,49 @@ function App() {
     return () => controller.abort();
   }, []);
 
+  async function handleUpload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedFile || isUploading) {
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
+      const uploadResponse = await fetch("/photos", {
+        method: "POST",
+        body: formData,
+      });
+      if (!uploadResponse.ok) {
+        throw new Error("Upload failed.");
+      }
+
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      try {
+        setPhotos(await fetchPhotos());
+        setError(null);
+      } catch {
+        setUploadError(
+          "Your photo was uploaded, but Memora could not refresh the gallery.",
+        );
+      }
+    } catch {
+      setUploadError(
+        "Memora could not upload this photo. Choose a valid JPEG or PNG and try again.",
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
   return (
     <main className="page-shell">
       <header className="page-header">
@@ -51,6 +101,31 @@ function App() {
         <h1>Memora</h1>
         <p className="subtitle">Your photos, stored and viewed locally.</p>
       </header>
+
+      <form className="upload-form" onSubmit={handleUpload}>
+        <label htmlFor="photo-upload">Choose one photo</label>
+        <div className="upload-controls">
+          <input
+            ref={fileInputRef}
+            id="photo-upload"
+            type="file"
+            accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+            disabled={isUploading}
+            onChange={(event) => {
+              setSelectedFile(event.target.files?.[0] ?? null);
+              setUploadError(null);
+            }}
+          />
+          <button type="submit" disabled={!selectedFile || isUploading}>
+            {isUploading ? "Uploading…" : "Upload photo"}
+          </button>
+        </div>
+        {uploadError && (
+          <p className="upload-error" role="alert">
+            {uploadError}
+          </p>
+        )}
+      </form>
 
       {isLoading && <p className="status">Loading your photos…</p>}
 

@@ -59,6 +59,51 @@ h1 {
   font-size: clamp(1rem, 2vw, 1.2rem);
 }
 
+.upload-form {
+  margin-bottom: 32px;
+  padding: 20px;
+  border: 1px solid #d8d5ca;
+  border-radius: 18px;
+  background: #faf9f5;
+}
+
+.upload-form label {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.upload-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.upload-controls input {
+  min-width: 0;
+  flex: 1;
+}
+
+.upload-controls button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #405c43;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.upload-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.upload-error {
+  margin: 14px 0 0;
+  color: #8d3f35;
+}
+
 .status {
   padding: 32px;
   border: 1px solid #d8d5ca;
@@ -118,5 +163,10 @@ h1 {
 
   .photo-grid {
     gap: 16px;
+  }
+
+  .upload-controls {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
